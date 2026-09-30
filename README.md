@@ -2,10 +2,9 @@ DCCP
 
 <img width="1450" height="935" alt="arch_full" src="https://github.com/user-attachments/assets/91647b3a-ea6f-4d8c-9dfa-6ebcda2362e3" />
 
-
 # Datagram Congestion Control Protocol
 
-Outil avancé de test, analyse et simulation du protocole DCCP (Datagram Congestion Control Protocol, RFC 4340, RFC 5595, RFC 5596, RFC 5762, RFC 6773). Créé par la communauté Hackers Tchad.
+Outil de protocole DCCP (Datagram Congestion Control Protocol, RFC 4340, RFC 5595, RFC 5596, RFC 5762, RFC 6773). Créé par la communauté Hackers Tchad.
 
 ## Qu'est-ce que DCCP ?
 
@@ -79,9 +78,8 @@ sudo tcpdump -i any -n proto 33
 
 - TCP/IP Illustrated, Volume 1 — W. Richard Stevens
 - The Linux Networking Architecture — Klaus Wehrle et al.
-- Network Protocols: Architecture, Security and Standardization — Thorsten Braun
+- Network Protocols: Architecture, Security and Standardization — Thorsten
 
-
-## Auteur
-
-Créé par Hackers Tchad 
+  Auter
+  
+  Hackers Tchad 
