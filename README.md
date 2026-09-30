@@ -1,32 +1,29 @@
-# DCCP Advanced Toolkit
 
-A sophisticated, single-file Python GUI application for exploring and interacting with the DCCP (Datagram Congestion Control Protocol) stack over Wi-Fi and Ethernet interfaces.
+DCCP
 
-## Features
+Une application graphique Python sophistiquée à fichier unique pour explorer et interagir avec la pile DCCP (Datagram Congestion Control Protocol) via des interfaces Wi-Fi et Ethernet.
 
-- Full DCCP state machine (CLOSED, REQUEST, RESPOND, PARTOPEN, OPEN, CLOSING, TIMEWAIT, CLOSED)
-- Packet crafting, capture, injection and parsing via Scapy
-- Congestion control profiles (CCID2, CCID3, custom)
-- Connection manager with multiple simultaneous DCCP flows
-- Real-time packet logger, hexdump, statistics and charts
-- Wi-Fi / interface scanner and selector
-- Red/green hacker-style tkinter interface
-- Built-in fuzzer and stress generator
-- PCAP export / import
+## Caractéristiques
 
-## Usage
+- Machine d'état DCCP complète (FERMÉE, DEMANDE, RÉPONSE, PARTOPEN, OUVERTE, FERMETURE, TIMEWAIT, FERMÉE)
+- Création, capture, injection et analyse de paquets via Scapy
+- Profils de contrôle de congestion (CCID2, CCID3, coutume) 
+- Gestionnaire de connexions avec plusieurs flux DCCP simultanés
+- Enregistreur de paquets en temps réel, hexdump, statistiques et graphiques
+-Scanner et sélecteur Wi-Fi / interface
+- Interface tkinter de style pirate rouge / vert
+- Fuzzer intégré et générateur de stress
+- Exportation / importation PCAP
 
-```bash
-pip install -r requirements.txt
-sudo python3 dccp_toolkit.py
+## Utilisation
+
+"'coup
+exigences d'installation de pip -r.txt
+python sudo 3 dccp_toolkit.py
 ```
 
-Root / sudo privileges are required for raw socket packet crafting and capture.
+Les privilèges Root / sudo sont requis pour la création et la capture de paquets de socket bruts.
 
-## Authors
+## Auteurs
 
 Hackers Tchad
-
-## License
-
-Educational use only.
