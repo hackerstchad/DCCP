@@ -8,10 +8,9 @@ Une application graphique Python sophistiquée à fichier unique pour explorer e
 - Machine d'état DCCP complète (FERMÉE, DEMANDE, RÉPONSE, PARTOPEN, OUVERTE, FERMETURE, TIMEWAIT, FERMÉE)
 - Création, capture, injection et analyse de paquets via Scapy
 - Profils de contrôle de congestion (CCID2, CCID3, coutume) 
-- Gestionnaire de connexions avec plusieurs flux DCCP simultanés
+- Gestionnaire de connexions avec plusieurs flux DCCP 
 - Enregistreur de paquets en temps réel, hexdump, statistiques et graphiques
 -Scanner et sélecteur Wi-Fi / interface
-- Interface tkinter de style pirate rouge / vert
 - Fuzzer intégré et générateur de stress
 - Exportation / importation PCAP
 
