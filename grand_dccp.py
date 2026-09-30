@@ -2,33 +2,28 @@
 # -*- coding: utf-8 -*-
 """
 ================================================================================
- DCCP - Datagram Congestion Control Protocol
- Advanced Python Implementation / Simulator / Analyzer / Lab
- Créé par Hackers Tchad — Interface Rouge & Green
- Version : 1.0.0
+ GRAND DCCP — Protocole DCCP Avancé & Complet
+ Hackers Tchad — Interface Rouge & Green
+ Version : 2.0.0
 ================================================================================
 
-Ce script fournit une implémentation avancée, éducative et expérimentale du
-protocole DCCP (RFC 4340, RFC 4341, RFC 4342, RFC 5622), avec :
-- Stack DCCP complète (states, handshakes, feature negotiation, CCIDs)
-- Parseur de paquets DCCP binaires
-- Client/Serveur DCCP via UDP socket underlay
-- Outils d'analyse Wireshark-like
-- Générateur de trames DCCP
-- Laboratoire de congestion control (CCID-2, CCID-3)
-- CLI colorée (rouge/vert) style hacker
-- Mode MITM / proxy DCCP pour inspection
-- Statistiques temps réel
+GRAND DCCP est une suite complète d'outils pour le protocole DCCP :
+- Stack DCCP complète avec machine à états
+- Client / Serveur / Proxy / MITM / Fuzzer
+- Analyseur de captures (binaire/JSON/pcap)
+- Générateur de paquets DCCP valides et invalides
+- Outils de sécurité : scanning, fingerprinting, stress test
 - Export pcap-like JSON
+- Interface CLI colorée rouge/verte
 
 USAGE:
-    python dccp_protocol.py --mode server --host 0.0.0.0 --port 5001
-    python dccp_protocol.py --mode client --host 127.0.0.1 --port 5001
-    python dccp_protocol.py --mode analyze --pcap capture.json
-    python dccp_protocol.py --mode generate --count 100
+    python grand_dccp.py server --host 0.0.0.0 --port 5001
+    python grand_dccp.py client --host 127.0.0.1 --port 5001 --remote 127.0.0.1:5001
+    python grand_dccp.py fuzz --target 127.0.0.1:5001
+    python grand_dccp.py scan --network 192.168.1.0/24 --port 5001
+    python grand_dccp.py analyze --file capture.json
 
-ATTENTION : Ce logiciel est fourni à des fins éducatives et de recherche.
-Respectez les lois locales et n'utilisez ces outils que sur vos propres réseaux.
+ATTENTION : Utilisation éducative uniquement. Respectez les lois locales.
 ================================================================================
 """
 
@@ -42,7 +37,6 @@ import copy
 import datetime
 import enum
 import errno
-import fcntl
 import hashlib
 import heapq
 import inspect
@@ -140,13 +134,13 @@ class UI:
     WIDTH = 78
 
     @classmethod
-    def banner(cls, title: str = "DCCP PROTOCOL LAB") -> str:
+    def banner(cls, title: str = "GRAND DCCP") -> str:
         date_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines = [
             f"{Colors.BG_BLACK}{Colors.BRIGHT_RED}╔{'═' * cls.WIDTH}╗{Colors.RESET}",
             f"{Colors.BG_BLACK}{Colors.BRIGHT_RED}║{Colors.BRIGHT_GREEN} {title.center(cls.WIDTH - 1)}{Colors.BRIGHT_RED}║{Colors.RESET}",
             f"{Colors.BG_BLACK}{Colors.BRIGHT_RED}╠{'═' * cls.WIDTH}╣{Colors.RESET}",
-            f"{Colors.BG_BLACK}{Colors.BRIGHT_RED}║{Colors.RED} Hackers Tchad {Colors.GREEN}• Advanced DCCP Stack & Analyzer".ljust(cls.WIDTH + 20) + f"{Colors.BRIGHT_RED}║{Colors.RESET}",
+            f"{Colors.BG_BLACK}{Colors.BRIGHT_RED}║{Colors.RED} Hackers Tchad {Colors.GREEN}• Advanced DCCP Suite".ljust(cls.WIDTH + 20) + f"{Colors.BRIGHT_RED}║{Colors.RESET}",
             f"{Colors.BG_BLACK}{Colors.BRIGHT_RED}║{Colors.GREEN} {date_now.ljust(cls.WIDTH - 2)}{Colors.BRIGHT_RED}║{Colors.RESET}",
             f"{Colors.BG_BLACK}{Colors.BRIGHT_RED}╚{'═' * cls.WIDTH}╝{Colors.RESET}",
         ]
@@ -342,7 +336,7 @@ def seqno_lt(a: int, b: int) -> bool:
 
 
 def crc16(data: bytes, poly: int = 0x8005, init: int = 0x0000) -> int:
-    """CRC-16-IBM implémenté en pur Python pour l'intégrité des paquets."""
+    """CRC-16-IBM implémenté en pur Python."""
     crc = init
     for byte in data:
         crc ^= byte << 8
@@ -356,7 +350,7 @@ def crc16(data: bytes, poly: int = 0x8005, init: int = 0x0000) -> int:
 
 
 def checksum_ipv4_pseudo(src: str, dst: str, protocol: int, length: int) -> bytes:
-    """Pseudo-header IPv4 pour checksum DCCP (RFC 4340 Section 9)."""
+    """Pseudo-header IPv4 pour checksum DCCP."""
     src_bytes = socket.inet_aton(src)
     dst_bytes = socket.inet_aton(dst)
     return src_bytes + dst_bytes + struct.pack("!BBH", 0, protocol, length)
@@ -488,11 +482,10 @@ class DCCPCodec:
 
     @staticmethod
     def encode(packet: DCCPPacket) -> bytes:
-        """Sérialise un DCCPPacket en octets bruts."""
         ext = 1 if packet.extended_seqno else 0
         type_n_ccval = (packet.type << 4) | (packet.ccval & 0x0F)
         first_word = (packet.source_port << 16) | packet.destination_port
-        third_word = ((packet.data_offset // 4) << 28) | (packet.cscov << 8) | type_n_ccval
+        third_word = ((packet.data_offset // 4) << 28) | (ext << 16) | (packet.cscov << 8) | type_n_ccval
         if packet.extended_seqno:
             seq_bytes = struct.pack("!Q", packet.sequence_number)[2:]
         else:
@@ -517,14 +510,13 @@ class DCCPCodec:
             seq_bytes + ack_bytes + service_bytes + options_bytes
         )
         actual_offset = len(header_without_checksum) // 4
-        third_word = (actual_offset << 28) | (packet.cscov << 8) | type_n_ccval
+        third_word = (actual_offset << 28) | (ext << 16) | (packet.cscov << 8) | type_n_ccval
         header_without_checksum = (
             struct.pack("!I", first_word) +
             struct.pack("!I", third_word) +
             seq_bytes + ack_bytes + service_bytes + options_bytes
         )
 
-        # Checksum sur header + data + pseudo header (dummy 0.0.0.0)
         checksum = DCCPCodec.compute_checksum(header_without_checksum + packet.data, "0.0.0.0", "0.0.0.0")
         final_header = header_without_checksum[:6] + struct.pack("!H", checksum) + header_without_checksum[8:]
         return final_header + packet.data
@@ -654,18 +646,15 @@ class DCCPCodec:
 # Congestion Control (CCID-2, CCID-3)
 # ---------------------------------------------------------------------------
 
-class CongestionController(abc := __import__("abc").ABC):
-    @abc.abstractmethod
+class CongestionController:
     def on_ack(self, ackno: int, now: float):
-        pass
+        raise NotImplementedError
 
-    @abc.abstractmethod
     def on_loss(self, seqno: int, now: float):
-        pass
+        raise NotImplementedError
 
-    @abc.abstractmethod
     def cwnd(self) -> int:
-        pass
+        raise NotImplementedError
 
 
 class CCID2Controller(CongestionController):
@@ -717,7 +706,6 @@ class CCID3Controller(CongestionController):
         self.last_rate_update = time.time()
 
     def on_ack(self, ackno: int, now: float):
-        # Simplified TFRC rate equation
         if self.loss_event_rate == 0:
             self._cwnd += self.mss
         else:
@@ -738,7 +726,7 @@ class CCID3Controller(CongestionController):
 # ---------------------------------------------------------------------------
 
 class DCCPStateMachine:
-    """Implémente la machine à états DCCP RFC 4340 Section 8."""
+    """Machine à états DCCP RFC 4340 Section 8."""
 
     VALID_TRANSITIONS = {
         DCCPState.CLOSED: {DCCPState.REQUEST},
@@ -1108,6 +1096,116 @@ class DCCPTrafficGenerator:
 
 
 # ---------------------------------------------------------------------------
+# Scanner / Fingerprinting
+# ---------------------------------------------------------------------------
+
+class DCCPScanner:
+    """Scanner de ports DCCP et fingerprinting de stack."""
+
+    def __init__(self, target: str, port: int):
+        self.target = target
+        self.port = port
+        self.codec = DCCPCodec()
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.settimeout(2)
+
+    def probe(self) -> Optional[DCCPPacket]:
+        req = DCCPPacket(
+            source_port=random.randint(10000, 65000),
+            destination_port=self.port,
+            data_offset=0,
+            ccval=0,
+            cscov=0,
+            type=DCCPType.REQUEST,
+            extended_seqno=False,
+            sequence_number=random.randint(1, 0xFFFFFF),
+            ack_number_present=False,
+            service_code=0x46415445,
+            options=[(DCCPOption.CHANGE_L, struct.pack("!BB", DCCPFeature.CCID, CCID.CCID_2))],
+        )
+        raw = self.codec.encode(req)
+        self.sock.sendto(raw, (self.target, self.port))
+        try:
+            data, _ = self.sock.recvfrom(4096)
+            return self.codec.decode(data)
+        except socket.timeout:
+            return None
+
+    def scan_network(self, network: str, port: int, timeout: float = 1.0) -> List[Tuple[str, DCCPPacket]]:
+        results = []
+        net = ipaddress.ip_network(network, strict=False)
+        for ip in net.hosts():
+            scanner = DCCPScanner(str(ip), port)
+            scanner.sock.settimeout(timeout)
+            resp = scanner.probe()
+            if resp:
+                results.append((str(ip), resp))
+        return results
+
+
+# ---------------------------------------------------------------------------
+# Stress / Fuzz Runner
+# ---------------------------------------------------------------------------
+
+class DCCPFuzzer:
+    """Fuzz cible DCCP avec paquets valides et invalides."""
+
+    def __init__(self, target_host: str, target_port: int):
+        self.target = (target_host, target_port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.codec = DCCPCodec()
+        self.stats = {"sent": 0, "responses": 0, "timeouts": 0}
+
+    def fuzz_packet(self) -> bytes:
+        # Randomize header fields
+        src_port = random.randint(1, 65535)
+        dst_port = self.target[1]
+        data_offset = random.choice([0, 12, 16, 20, 255])
+        ccval = random.randint(0, 15)
+        cscov = random.randint(0, 15)
+        pkt_type = random.randint(0, 15)
+        ext = random.choice([0, 1])
+        seq = random.randint(0, 0xFFFFFFFFFFFF)
+        ack = random.randint(0, 0xFFFFFFFFFFFF)
+        # Build minimal raw bytes, possibly malformed
+        first = struct.pack("!HHI", src_port, dst_port, 0)
+        third = (data_offset << 28) | (ext << 16) | (cscov << 8) | (pkt_type << 4) | ccval
+        header = first + struct.pack("!I", third)
+        if ext:
+            header += struct.pack("!Q", seq)[2:]
+        else:
+            header += struct.pack("!I", seq & 0xFFFFFFFF)
+        if random.choice([True, False]):
+            if ext:
+                header += struct.pack("!Q", ack)[2:]
+            else:
+                header += struct.pack("!I", ack & 0xFFFFFFFF)
+        header += os.urandom(random.randint(0, 128))
+        return header
+
+    def run(self, count: int = 1000, delay: float = 0.001):
+        UI.warn(f"Starting DCCP fuzz against {self.target[0]}:{self.target[1]}")
+        for i in range(count):
+            try:
+                raw = self.fuzz_packet()
+                self.sock.sendto(raw, self.target)
+                self.stats["sent"] += 1
+                try:
+                    self.sock.settimeout(0.5)
+                    data, _ = self.sock.recvfrom(4096)
+                    self.stats["responses"] += 1
+                    pkt = self.codec.decode(data)
+                    if pkt:
+                        UI.debug(f"Response: {pkt.summary()}")
+                except socket.timeout:
+                    self.stats["timeouts"] += 1
+                time.sleep(delay)
+            except Exception as e:
+                UI.error(f"Fuzz error: {e}")
+        UI.info(f"Fuzz complete: {self.stats}")
+
+
+# ---------------------------------------------------------------------------
 # Proxy / MITM
 # ---------------------------------------------------------------------------
 
@@ -1166,8 +1264,9 @@ def run_server(args):
         while True:
             time.sleep(1)
             os.system("clear" if os.name == "posix" else "cls")
-            print(UI.banner("DCCP SERVER"))
+            print(UI.banner("GRAND DCCP SERVER"))
             print(analyzer.summary())
+            print(UI.box("Appuyez sur Ctrl+C pour arrêter le serveur."))
     except KeyboardInterrupt:
         if args.export:
             analyzer.export_json(args.export)
@@ -1177,16 +1276,17 @@ def run_server(args):
 def run_client(args):
     transport = DCCPTransport(args.host, args.port, is_server=False)
     transport.start()
-    transport.connect(args.remote_host, args.remote_port, args.service_code)
+    rh, rp = args.remote.split(":")
+    transport.connect(rh, int(rp), args.service_code)
     UI.info("Sent DCCP REQUEST. Waiting for handshake...")
     try:
         for i in range(args.count):
             time.sleep(1)
-            conn = transport.connections.get((args.remote_host, args.remote_port))
+            conn = transport.connections.get((rh, int(rp)))
             if conn and conn.state == DCCPState.OPEN:
                 pkt = DCCPPacket(
                     source_port=args.port,
-                    destination_port=args.remote_port,
+                    destination_port=int(rp),
                     data_offset=0,
                     ccval=0,
                     cscov=0,
@@ -1196,7 +1296,7 @@ def run_client(args):
                     ack_number_present=False,
                     data=f"Hello DCCP {i}".encode(),
                 )
-                transport.send_packet(pkt, (args.remote_host, args.remote_port))
+                transport.send_packet(pkt, (rh, int(rp)))
                 UI.info(f"Sent DATA seq={pkt.sequence_number}")
     except KeyboardInterrupt:
         transport.stop()
@@ -1205,16 +1305,19 @@ def run_client(args):
 def run_analyze(args):
     codec = DCCPCodec()
     analyzer = DCCPAnalyzer()
-    with open(args.pcap, "rb") as f:
-        if args.pcap.endswith(".json"):
-            for item in json.load(f):
-                raw = binascii.unhexlify(item.get("raw", ""))
+    with open(args.file, "rb") as f:
+        if args.file.endswith(".json"):
+            items = json.load(f)
+            for item in items:
+                if isinstance(item, dict) and "raw" in item:
+                    raw = binascii.unhexlify(item["raw"])
+                else:
+                    raw = binascii.unhexlify(item)
                 pkt = codec.decode(raw)
                 if pkt:
                     analyzer.add(pkt)
         else:
             data = f.read()
-            # Assume concatenated DCCP packets for demo
             offset = 0
             while offset < len(data):
                 if offset + DCCP_HEADER_MIN_LEN > len(data):
@@ -1227,7 +1330,7 @@ def run_analyze(args):
                 if pkt:
                     analyzer.add(pkt)
                 offset += pkt_len
-    print(UI.banner("DCCP ANALYZER"))
+    print(UI.banner("GRAND DCCP ANALYZER"))
     print(analyzer.summary())
     for pkt in analyzer.packets[:args.max_display]:
         print(UI.box(pkt.summary(), Colors.BRIGHT_GREEN))
@@ -1238,15 +1341,41 @@ def run_analyze(args):
 def run_generate(args):
     gen = DCCPTrafficGenerator()
     packets = gen.generate(args.count)
-    out_path = args.output or "dccp_generated.bin"
+    out_path = args.output or "grand_dccp_generated.bin"
     with open(out_path, "wb") as f:
         for p in packets:
             f.write(struct.pack("!H", len(p)) + p)
     UI.info(f"Generated {len(packets)} DCCP packets into {out_path}")
 
 
+def run_scan(args):
+    if args.target:
+        scanner = DCCPScanner(args.target, args.port)
+        resp = scanner.probe()
+        print(UI.banner("GRAND DCCP SCANNER"))
+        if resp:
+            print(UI.box(f"DCCP répondu: {resp.summary()}"))
+        else:
+            print(UI.box("Aucune réponse DCCP reçue.", Colors.BRIGHT_YELLOW))
+    elif args.network:
+        print(UI.banner("GRAND DCCP NETWORK SCAN"))
+        results = DCCPScanner("", args.port).scan_network(args.network, args.port, args.timeout)
+        if results:
+            rows = [[ip, pkt.type_name(), pkt.sequence_number] for ip, pkt in results]
+            print(UI.table(["IP", "Type", "Seq"], rows))
+        else:
+            UI.warn("Aucun hôte DCCP trouvé.")
+
+
+def run_fuzz(args):
+    rh, rp = args.target.split(":")
+    fuzzer = DCCPFuzzer(rh, int(rp))
+    fuzzer.run(args.count, args.delay)
+
+
 def run_proxy(args):
-    proxy = DCCPProxy(args.host, args.port, args.remote_host, args.remote_port)
+    rh, rp = args.remote.split(":")
+    proxy = DCCPProxy(args.host, args.port, rh, int(rp))
     try:
         proxy.start()
     except KeyboardInterrupt:
@@ -1255,8 +1384,8 @@ def run_proxy(args):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        prog="dccp_protocol.py",
-        description="DCCP Protocol Advanced Lab — Hackers Tchad",
+        prog="grand_dccp.py",
+        description="GRAND DCCP — Suite avancée DCCP — Hackers Tchad",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""\
             Modes:
@@ -1264,21 +1393,26 @@ def parse_args():
               client    Lance un client DCCP
               analyze   Analyse une capture binaire ou JSON
               generate  Génère des paquets DCCP aléatoires
+              scan      Scan un hôte ou un réseau DCCP
+              fuzz      Fuzz une cible DCCP
               proxy     Proxy MITM/inspecteur DCCP
         """)
     )
-    parser.add_argument("--mode", choices=["server", "client", "analyze", "generate", "proxy"], required=True)
-    parser.add_argument("--host", default="0.0.0.0", help="Adresse locale (défaut: 0.0.0.0)")
+    parser.add_argument("--mode", choices=["server", "client", "analyze", "generate", "scan", "fuzz", "proxy"], required=True)
+    parser.add_argument("--host", default="0.0.0.0", help="Adresse locale")
     parser.add_argument("--port", type=int, default=DCCP_PORT_DEFAULT, help="Port local")
-    parser.add_argument("--remote-host", default="127.0.0.1", help="Adresse distante (client/proxy)")
-    parser.add_argument("--remote-port", type=int, default=DCCP_PORT_DEFAULT, help="Port distant")
+    parser.add_argument("--remote", default="127.0.0.1:5001", help="Adresse:port distant (client/proxy)")
+    parser.add_argument("--target", default=None, help="Cible unique (scan/fuzz)")
+    parser.add_argument("--network", default=None, help="Réseau CIDR (scan)")
     parser.add_argument("--service-code", type=int, default=0, help="Service code")
-    parser.add_argument("--count", type=int, default=10, help="Nombre de paquets/data à envoyer/générer")
-    parser.add_argument("--pcap", default="capture.json", help="Fichier de capture à analyser")
+    parser.add_argument("--count", type=int, default=10, help="Nombre de paquets/data/envois")
+    parser.add_argument("--delay", type=float, default=0.001, help="Délai entre paquets fuzz")
+    parser.add_argument("--timeout", type=float, default=1.0, help="Timeout scan")
+    parser.add_argument("--file", default="capture.json", help="Fichier de capture à analyser")
     parser.add_argument("--output", default=None, help="Fichier de sortie (generate)")
     parser.add_argument("--export", default=None, help="Exporter la capture au format JSON")
     parser.add_argument("--max-display", type=int, default=20, help="Nombre max de paquets à afficher")
-    parser.add_argument("--hexdump", action="store_true", help="Afficher le hexdump des paquets")
+    parser.add_argument("--hexdump", action="store_true", help="Afficher le hexdump")
     parser.add_argument("--no-color", action="store_true", help="Désactiver les couleurs")
     return parser.parse_args()
 
@@ -1287,10 +1421,10 @@ def main():
     args = parse_args()
     if args.no_color:
         Colors.disable()
-    print(UI.banner("DCCP PROTOCOL LAB"))
+    print(UI.banner("GRAND DCCP"))
     print(UI.box(
-        "Outil avancé d'apprentissage et de laboratoire pour le protocole DCCP. "
-        "Utilisez-le uniquement sur vos propres réseaux. Créé par Hackers Tchad.",
+        "Suite avancée d'apprentissage et de laboratoire pour le protocole DCCP. "
+        "Utilisez-la uniquement sur vos propres réseaux. Créé par Hackers Tchad.",
         Colors.BRIGHT_GREEN,
     ))
     if args.mode == "server":
@@ -1301,6 +1435,10 @@ def main():
         run_analyze(args)
     elif args.mode == "generate":
         run_generate(args)
+    elif args.mode == "scan":
+        run_scan(args)
+    elif args.mode == "fuzz":
+        run_fuzz(args)
     elif args.mode == "proxy":
         run_proxy(args)
 
