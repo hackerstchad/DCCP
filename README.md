@@ -1,6 +1,6 @@
 DCCP
 
-<img width="1248" height="832" alt="OIG2 (4)" src="https://github.com/user-attachments/assets/f72c2d69-7a1c-403e-89f1-99f9073a16f4" />
+<img width="1450" height="935" alt="arch_full" src="https://github.com/user-attachments/assets/91647b3a-ea6f-4d8c-9dfa-6ebcda2362e3" />
 
 
 Une application graphique Python sophistiquée à fichier unique pour explorer et interagir avec la pile DCCP (Datagram Congestion Control Protocol) via des interfaces Wi-Fi et Ethernet.
