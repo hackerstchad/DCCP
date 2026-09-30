@@ -82,6 +82,6 @@ sudo tcpdump -i any -n proto 33
 - Network Protocols: Architecture, Security and Standardization — Thorsten Braun
 
 
-## Crédits
+## Auteur
 
-Créé par Hackers Tchad — pour l'éducation, la recherche et la souveraineté numérique africaine.
+Créé par Hackers Tchad 
