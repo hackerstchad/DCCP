@@ -16,7 +16,6 @@ Une application graphique Python sophistiquée à fichier unique pour explorer e
 
 ## Utilisation
 
-     coup
      exigences d'installation de pip -r.txt
      python sudo 3 dccp_toolkit.py
 
